@@ -1,26 +1,18 @@
-from flask_cors import CORS
-from flask_restful import Api
+from flask_jwt_extended import JWTManager
 
-from apps.candidate.views import candidate, Candidate, CandidateList, CandidateTag
-from apps.tags.views import tag, ListTag, TagUpdate, CreateTag
-from apps.users.views import user, Users, Refresh, Login
-from rest.app import app
+from rest.flask_factory import app
+from settings import env
+from settings.env import JWT_SECRET_KEY
+from utils.log import setup_logging
 
-app.register_blueprint(candidate)
-app.register_blueprint(tag)
-app.register_blueprint(user)
-api = Api(app)
-CORS(app)
+app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY  # Change this!
+jwt = JWTManager(app)
 
-api.add_resource(Candidate, '/candidate/<int:id>')
-api.add_resource(CandidateList, '/candidates')
-api.add_resource(TagUpdate, '/tag/<int:id>')
-api.add_resource(CreateTag, '/tag/create')
-api.add_resource(ListTag, '/tags')
-api.add_resource(Users, '/users')
-api.add_resource(Login, '/login')
-api.add_resource(Refresh, '/refresh')
-api.add_resource(CandidateTag, '/candidate/tag')
+
+def init():
+    setup_logging(None, screen_log=True)
+
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    init()
+    app.run(host="0.0.0.0", port=env.SERVER_PORT, threaded=True)

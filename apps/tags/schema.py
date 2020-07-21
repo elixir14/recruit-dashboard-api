@@ -11,7 +11,3 @@ class TagSchema(ma.ModelSchema):
 class TagListSchema(ma.Schema):
     class Meta:
         fields = ('id', 'label', 'value', 'color')
-
-
-tag_schema = TagSchema()
-tag_listSchema = TagListSchema()

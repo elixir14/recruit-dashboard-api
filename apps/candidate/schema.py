@@ -14,8 +14,4 @@ class CandidateSchema(ma.SQLAlchemyAutoSchema):
         return tags
 
     class Meta:
-        # Fields to expose
         model = Candidate
-
-
-candidate_schema = CandidateSchema()

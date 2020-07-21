@@ -1,42 +1,39 @@
-from datetime import timedelta
+import logging
 
-from flask import Blueprint, jsonify, request
-from flask_bcrypt import Bcrypt
-from flask_jwt_extended import (create_access_token, create_refresh_token, jwt_refresh_token_required,
-                                get_jwt_identity)
-from flask_restful import Resource
+from flask import jsonify, request
+from flask_jwt_extended import (create_access_token, get_jwt_identity)
+from flask_restx import Resource
 
-from apps.functions.logger import get_logger
-from rest.app import db
+from rest.app import bcrypt, db
+from utils.auth import get_auth
+from utils.constants import HTTPCode
+from utils.response import api_response
 from .models import User
-from .schema import user_schema
+from .schema import UserSchema
 
-bcrypt = Bcrypt()
-logger = get_logger()
-
-user = Blueprint('user', __name__)
+logger = logging.getLogger(__name__)
 
 
-class Users(Resource):
+class UserSignup(Resource):
+    def __init__(self, *args, **kwargs):
+        self.schema = UserSchema()
+        super().__init__(*args, **kwargs)
+
     def post(self):
         if len(request.json['username']) == 0 and len(request.json['password']) == 0 and len(
                 request.json['email']) == 0:
             return jsonify({'error': 'Every fields are required.'})
         username = request.json['username']
-        password = bcrypt.generate_password_hash(request.json['password'])
+        password = bcrypt.generate_password_hash(request.json['password']).decode('utf-8')
         check_user = User.query.filter_by(username=username).first()
         if not check_user:
-            check_email = User.query.filter_by(email=request.json['email']).first()
-            if not check_email:
-                create_user = User(username=username, email=request.json['email'], password=password, data='')
-                db.session.add(create_user)
-                db.session.commit()
-                logger.info('User created successfully')
-                return user_schema.jsonify(create_user)
-            else:
-                return jsonify({'error': 'Email is already in use.'})
+            user = User(username=username, email=request.json['email'], password=password, data='')
+            db.session.add(user)
+            db.session.commit()
+            logger.info('User created successfully')
+            return api_response(data=self.schema.dump(user), code=HTTPCode.HTTP_200_STATUS_OK)
         else:
-            return jsonify({'error': 'Username is already in use.'})
+            return api_response(msg='Username is already in use.', code=HTTPCode.HTTP_400_BAD_REQUEST)
 
 
 class Login(Resource):
@@ -44,29 +41,23 @@ class Login(Resource):
         # get_data=request.json['data']
         if len(request.json['username']) == 0 or len(request.json['password']) == 0:
             return jsonify({'error': 'Username or password can not be  null.'})
-        get_user = User.query.filter_by(username=request.json['username']).first()
-        if get_user:
-            check_pass = bcrypt.check_password_hash(get_user.password, request.json['password'])
+        user = User.query.filter_by(username=request.json['username']).first()
+        password = request.json['password']
+        if user:
+            check_pass = bcrypt.check_password_hash(user.password, password)
         else:
-            return jsonify({'error': 'Username does not exist.'})
-        if get_user and check_pass:
-            result = user_schema.dump(get_user)
+            return api_response(msg='Username does not exist.', code=HTTPCode.HTTP_400_BAD_REQUEST)
+        if user and check_pass:
             logger.info('User retrieved successfully')
-            access_expires = timedelta(minutes=60)
-            refresh_expires = timedelta(days=365)
-            access_token = create_access_token(identity=get_user.username, expires_delta=access_expires, fresh=True)
-            refresh_token = create_refresh_token(identity=get_user.username, expires_delta=refresh_expires)
-            return jsonify(
-                {'user': '{}'.format(get_user.username), 'access_token': access_token, 'refresh_token': refresh_token,
-                 'data': get_user.data})
-        return jsonify({'error': 'Invalid user or password'})
+            auth_response = get_auth(user_id=user.id, fresh=True)
+            return api_response(data=auth_response, code=HTTPCode.HTTP_200_STATUS_OK)
+        return api_response(msg='Invalid username or password.', code=HTTPCode.HTTP_400_BAD_REQUEST)
 
 
 class Refresh(Resource):
-    @jwt_refresh_token_required
-    def get(self):
+    def post(self):
         current_user = get_jwt_identity()
-        access_expires = timedelta(minutes=60)
-        new_token = create_access_token(identity=current_user, expires_delta=access_expires, fresh=False)
-        ret = {'user': current_user, 'access_token': new_token}
-        return jsonify(ret)
+        ret = {
+            'access': create_access_token(identity=current_user)
+        }
+        return api_response(data=ret, code=HTTPCode.HTTP_200_STATUS_OK)

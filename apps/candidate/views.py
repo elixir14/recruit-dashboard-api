@@ -1,75 +1,73 @@
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required
-from flask_restful import Resource
+import logging
+
+from flask import Blueprint, request
+from flask_restx import Resource
 from marshmallow import ValidationError
 
-from apps.functions.logger import get_logger
 from apps.tags.models import Tag
 from rest.app import db
+from utils.constants import HTTPCode
+from utils.response import api_response
 from .models import Candidate as CandidateModel
-from .schema import candidate_schema
+from .schema import CandidateSchema
 
-logger = get_logger()
+logger = logging.getLogger(__name__)
 
 candidate = Blueprint('candidate', __name__)
 
 
 class Candidate(Resource):
-    @jwt_required
+    def __init__(self, *args, **kwargs):
+        self.schema = CandidateSchema()
+        super().__init__(*args, **kwargs)
+
     def put(self, id):
         candidate = CandidateModel.query.filter_by(uid=id).first()
         if candidate:
             try:
-                update_candidate = candidate_schema.load(request.json)
+                update_candidate = self.schema.load(request.json)
             except ValidationError as ex:
                 logger.exception(ex.messages)
-                return jsonify({'error': ex.messages})
+                return api_response(code=HTTPCode.HTTP_400_BAD_REQUEST, msg=ex.__str__())
             candidate = update_candidate
             db.session.commit()
             logger.info('Record updated successfully')
-            return candidate_schema.jsonify(candidate)
+            return api_response(code=HTTPCode.HTTP_200_STATUS_OK, data=self.schema.jsonify(candidate))
         else:
-            return jsonify({'error': 'Candidate Does not exist.'})
+            return api_response(code=HTTPCode.HTTP_200_STATUS_OK, msg='Candidate Does not exist.')
 
     def delete(self, id):
         candidate = CandidateModel.query.get(id)
         if candidate:
             db.session.delete(candidate)
             db.session.commit()
-            result = candidate_schema.dump(candidate)
+            result = self.schema.dump(candidate)
             logger.info('Record deleted successfully')
-            return jsonify(result)
+            return api_response(code=HTTPCode.HTTP_200_STATUS_OK, data=result)
         else:
-            return jsonify({'error': 'Candidate Does not exist.'})
+            return api_response(code=HTTPCode.HTTP_200_STATUS_OK, msg='Candidate Does not exist.')
 
 
 class CandidateList(Resource):
-    @jwt_required
+    def __init__(self, *args, **kwargs):
+        self.schema = CandidateSchema()
+        super().__init__(*args, **kwargs)
+
     def get(self):
-        tags = {}
-        tag_list = []
         candidates = CandidateModel.query.all()
-        # for i in candidates:
-        #     uid = i.uid
-        #     for j in i.addTags:
-        #         tag_list.append({'label': j.label, 'color': j.color, 'id': j.id, 'value': j.value})
-        #     tags[uid] = tag_list
-        #     tag_list = []
-        result = candidate_schema.dump(candidates, many=True)
-        # for i in result:
-        #     i['tags'] = tags[i['uid']]
-        return result
+        result = self.schema.dump(candidates, many=True)
+        return api_response(data=result, code=HTTPCode.HTTP_200_STATUS_OK)
 
 
 class CandidateTag(Resource):
-    @jwt_required
+
     def post(self):
         tag_ids = request.json['tags']
         candidate_id = request.json['candidate_id']
         tags = Tag.query.filter(Tag.id.in_(tag_ids)).all()
         candidate = CandidateModel.query.get(candidate_id)
         if not candidate:
-            return jsonify('Candidate does not exist'), 400
+            return api_response(msg='Candidate does not exist', code=HTTPCode.HTTP_200_STATUS_OK)
         candidate.addTags = tags
         db.session.commit()
-        return {'msg': 'updated'}, 200
+        return api_response(msg='Tag added to candidate successfully', code=HTTPCode.HTTP_200_STATUS_OK)

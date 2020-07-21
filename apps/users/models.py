@@ -1,4 +1,4 @@
-from rest.app import db, ma
+from rest.app import db
 
 
 class User(db.Model):
@@ -13,9 +13,3 @@ class User(db.Model):
         self.email = email
         self.password = password
         self.data = data
-
-
-class UserSchema(ma.Schema):
-    class Meta:
-        # Fields to expose
-        fields = ('username', 'email', 'data')

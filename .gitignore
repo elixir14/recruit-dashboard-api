@@ -131,4 +131,4 @@ dmypy.json
 .pyre/
 
 #logs
-/backend/apps/logs/*
+logs/*

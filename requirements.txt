@@ -54,3 +54,6 @@ troposphere==2.6.2
 urllib3==1.25.9
 Werkzeug==0.16.1
 wsgi-request-logger==0.4.6
+zappa==0.51.0
+
+python-dotenv~=0.14.0
